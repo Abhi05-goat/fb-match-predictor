@@ -73,3 +73,120 @@ Fb Match Predictor/
 ├── Combined.csv
 ├── Processed_Combined.csv
 └── README.md
+Machine Learning Pipeline
+The project follows this workflow:
+
+Collect raw Serie A match data from multiple football data sources.
+Extract and preprocess season-level fixture data.
+Combine multiple seasons into one dataset.
+Split the data into train and test sets.
+Engineer rolling team form features.
+Add xG and PPDA-based metrics.
+Train and compare classification models.
+Freeze the final XGBoost model for backend use.
+Serve predictions through a FastAPI backend.
+Model
+The final model is an XGBoost multi-class classifier trained to predict match outcomes.
+
+The frozen model artifact is stored at:
+
+text
+
+ML/Models/xgb_final.json
+Supporting model files:
+
+text
+
+ML/Models/feature_columns.json
+ML/Models/config.json
+ML/Models/eval_report.md
+Backend API
+The backend is built with FastAPI.
+
+Run the API locally
+bash
+
+uvicorn backend.app.main:app --reload
+Then open:
+
+text
+
+http://127.0.0.1:8000
+API documentation:
+
+text
+
+http://127.0.0.1:8000/docs
+Available Endpoints
+Root
+http
+
+GET /
+Returns a welcome response for the API.
+
+Health Check
+http
+
+GET /health
+Returns the current API health status.
+
+Upcoming Predictions
+http
+
+GET /predictions/upcoming
+Returns upcoming fixture predictions.
+
+At the current stage, this endpoint is being prepared for full model-backed inference using the frozen XGBoost classifier.
+
+Example API Response
+json
+
+{
+  "season": "2025-26",
+  "matchday": 31,
+  "fixtures": [
+    {
+      "home_team": "Inter",
+      "away_team": "Milan",
+      "kickoff": "2026-04-12 18:00",
+      "predicted_result": "Home",
+      "probabilities": {
+        "home": 0.52,
+        "draw": 0.24,
+        "away": 0.24
+      }
+    }
+  ]
+}
+Current Status
+The machine learning pipeline and final XGBoost model artifact are in place.
+
+The backend currently includes:
+
+FastAPI application setup
+Health check route
+Prediction route scaffold
+Pydantic response schemas
+Model loader module prepared for backend inference integration
+Next development steps:
+
+Load the frozen XGBoost model inside the backend
+Connect feature inputs to the prediction endpoint
+Generate predictions for upcoming Serie A fixtures
+Add frontend/dashboard support
+Improve API documentation and deployment readiness
+Purpose
+This project was built to explore practical sports analytics, machine learning classification, feature engineering, and backend API development using real football data.
+
+It is designed as an end-to-end portfolio project covering:
+
+Data scraping
+Data cleaning
+Feature engineering
+Model training
+Model evaluation
+Backend API development
+Deployment preparation
+Author
+Abhi
+GitHub: Abhi05-goat
