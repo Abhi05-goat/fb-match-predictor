@@ -1,58 +1,45 @@
-# Serie A Match Predictor
+# Serie A Analytics
 
-A machine learning project that predicts Serie A football match outcomes using historical match data, engineered team form features, Elo ratings, xG, PPDA, and a trained XGBoost classifier.
+A full-stack football analytics project covering end-to-end data engineering, machine learning, a FastAPI backend, and a Streamlit dashboard — built on historical Serie A match data.
 
-The project includes the full pipeline from raw data collection and preprocessing to model training and a FastAPI backend for serving predictions.
+The project predicts match outcomes using an XGBoost classifier and surfaces team-level analytics through a live dashboard backed by a REST API.
 
-## Project Overview
+***
 
-This project predicts whether a Serie A fixture is likely to end in a:
+## What It Does
 
-- Home win
-- Draw
-- Away win
+- **Predicts** Serie A match outcomes (Home Win / Draw / Away Win) using a trained XGBoost classifier
+- **Surfaces season standings** with tiebreakers (goal difference, goals scored) for any historical season
+- **Profiles individual teams** across points, goals, xG, Elo, PPDA, deep completions, and discipline
+- **Compares two teams** head-to-head across all key metrics with visualisations
+- **Serves all data** through a structured FastAPI backend with clean JSON endpoints
 
-The model is trained on historical Serie A match data and uses football-specific features such as recent team form, attacking/defensive performance, Elo strength, expected goals, and pressing metrics.
-
-## Features
-
-- Scrapes and processes Serie A fixture data
-- Combines historical seasons into a training dataset
-- Engineers rolling last-5-match team statistics
-- Adds xG and PPDA-based performance indicators
-- Trains multiple classifiers, including XGBoost, Logistic Regression, and CatBoost
-- Freezes the final XGBoost model for backend inference
-- Provides a FastAPI backend structure for prediction endpoints
-- Includes health and prediction routes for API development
+***
 
 ## Tech Stack
 
-- Python
-- Pandas
-- NumPy
-- Scikit-learn
-- XGBoost
-- CatBoost
-- FastAPI
-- Pydantic
-- Uvicorn
-- Git / GitHub
+| Layer | Tools |
+|---|---|
+| Data & ML | Python, Pandas, NumPy, Scikit-learn, XGBoost, CatBoost |
+| Backend | FastAPI, Pydantic, Uvicorn |
+| Frontend | Streamlit, Plotly |
+| Versioning | Git / GitHub |
+
+***
 
 ## Project Structure
 
 ```text
-Fb Match Predictor/
+Serie-A-Analytics/
 │
 ├── backend/
 │   └── app/
 │       ├── main.py
-│       ├── routes/
-│       │   ├── health.py
-│       │   └── predictions.py
-│       ├── schemas/
-│       │   └── prediction.py
-│       └── ml/
-│           └── model_loader.py
+│       └── routes/
+│           ├── health.py
+│           ├── seasons.py
+│           ├── teams.py
+│           └── predictions.py
 │
 ├── ML/
 │   ├── Models/
@@ -72,75 +59,86 @@ Fb Match Predictor/
 │
 ├── Combined.csv
 ├── Processed_Combined.csv
+├── dashboard.py
 └── README.md
-Machine Learning Pipeline
-The project follows this workflow:
+```
 
-Collect raw Serie A match data from multiple football data sources.
-Extract and preprocess season-level fixture data.
-Combine multiple seasons into one dataset.
-Split the data into train and test sets.
-Engineer rolling team form features.
-Add xG and PPDA-based metrics.
-Train and compare classification models.
-Freeze the final XGBoost model for backend use.
-Serve predictions through a FastAPI backend.
-Model
-The final model is an XGBoost multi-class classifier trained to predict match outcomes.
+***
 
-The frozen model artifact is stored at:
+## ML Pipeline
 
-text
+The pipeline runs sequentially across numbered notebooks/scripts:
 
-ML/Models/xgb_final.json
-Supporting model files:
+1. **Scrape** — Pull raw match data, Elo ratings, WhoScored, and Understat sources
+2. **Extract & Preprocess** — Clean and structure season-level fixture data
+3. **Combine** — Merge all seasons into a single training dataset
+4. **Split** — Create train/test sets with no data leakage
+5. **Feature Engineering** — Build rolling 5-match form stats per team
+6. **Add xG & PPDA** — Attach expected goals and pressing intensity metrics
+7. **Train** — Compare XGBoost, Logistic Regression, and CatBoost classifiers
+8. **Freeze** — Serialise the final XGBoost model to `ML/Models/xgb_final.json`
 
-text
+### Model
 
-ML/Models/feature_columns.json
-ML/Models/config.json
-ML/Models/eval_report.md
-Backend API
-The backend is built with FastAPI.
+The final model is an XGBoost multi-class classifier predicting three outcome classes.
 
-Run the API locally
-bash
+Key feature groups used at inference:
 
+- Rolling form (last 5 matches): points, wins, draws, losses, goals scored/conceded
+- xG (expected goals) and xG against
+- PPDA (passes allowed per defensive action — a pressing intensity proxy)
+- Deep completions (passes into the final third)
+- Elo rating differential
+
+***
+
+## Backend API
+
+Built with FastAPI. All endpoints are documented automatically at `/docs`.
+
+### Running locally
+
+```bash
 uvicorn backend.app.main:app --reload
-Then open:
+```
 
-text
+API base: `http://127.0.0.1:8000`  
+Swagger docs: `http://127.0.0.1:8000/docs`
 
-http://127.0.0.1:8000
-API documentation:
+### Endpoints
 
-text
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Root welcome response |
+| `GET` | `/health` | API health check |
+| `GET` | `/seasons` | List all available seasons |
+| `GET` | `/seasons/{season}/teams` | List all teams in a season |
+| `GET` | `/seasons/{season}/teams/standings` | Full league table sorted by points, GD, goals scored |
+| `GET` | `/seasons/{season}/teams/{team}/summary` | Full stat profile for a team in a season |
+| `GET` | `/predictions/upcoming` | Upcoming fixture predictions (XGBoost inference) |
 
-http://127.0.0.1:8000/docs
-Available Endpoints
-Root
-http
+### Standings response shape
 
-GET /
-Returns a welcome response for the API.
+```json
+[
+  {
+    "team_name": "Juventus",
+    "total_points": 87,
+    "matches_played": 38,
+    "points_per_match": 2.29,
+    "wins": 26,
+    "draws": 9,
+    "losses": 3,
+    "goal_difference": 55,
+    "goals_scored": 72,
+    "avg_xg": 1.55
+  }
+]
+```
 
-Health Check
-http
+### Prediction response shape
 
-GET /health
-Returns the current API health status.
-
-Upcoming Predictions
-http
-
-GET /predictions/upcoming
-Returns upcoming fixture predictions.
-
-At the current stage, this endpoint is being prepared for full model-backed inference using the frozen XGBoost classifier.
-
-Example API Response
-json
-
+```json
 {
   "season": "2025-26",
   "matchday": 31,
@@ -158,35 +156,61 @@ json
     }
   ]
 }
-Current Status
-The machine learning pipeline and final XGBoost model artifact are in place.
+```
 
-The backend currently includes:
+***
 
-FastAPI application setup
-Health check route
-Prediction route scaffold
-Pydantic response schemas
-Model loader module prepared for backend inference integration
-Next development steps:
+## Dashboard
 
-Load the frozen XGBoost model inside the backend
-Connect feature inputs to the prediction endpoint
-Generate predictions for upcoming Serie A fixtures
-Add frontend/dashboard support
-Improve API documentation and deployment readiness
-Purpose
-This project was built to explore practical sports analytics, machine learning classification, feature engineering, and backend API development using real football data.
+A Streamlit frontend connects to the FastAPI backend and provides two views.
 
-It is designed as an end-to-end portfolio project covering:
+### Running locally
 
-Data scraping
-Data cleaning
-Feature engineering
-Model training
-Model evaluation
-Backend API development
-Deployment preparation
-Author
-Abhi
-GitHub: Abhi05-goat
+```bash
+streamlit run dashboard.py
+```
+
+Requires the FastAPI backend to be running at `http://127.0.0.1:8000`.
+
+### Dashboard view
+
+Displays a selected team's full season profile:
+
+- Hero banner with season record
+- Key metrics: points per match, Elo, xG, PPDA, deep completions, cards
+- Quick Reads: season pace, goal margin, discipline load
+- **Overview tab** — result profile bar chart, scoring output chart, team strength radar
+- **Attack tab** — goals and xG breakdown
+- **Control & Discipline tab** — PPDA gauge, card stats
+- **JSON tab** — raw API response
+- **Standings table** (right panel) — full league table with Champions League, Europa, and relegation zone colour coding; selected team highlighted
+
+### Compare Teams view
+
+Side-by-side comparison of any two teams in a season:
+
+- Head-to-head metric matchup table (winning side highlighted)
+- Radar chart comparing normalised profiles across 6 dimensions
+- Grouped bar charts: per-match metrics, PPDA, Elo
+
+***
+
+## Current Status
+
+| Area | Status |
+|---|---|
+| ML pipeline | Complete |
+| XGBoost model (frozen) | Complete |
+| FastAPI backend | Complete |
+| Season & team stat endpoints | Complete |
+| Standings endpoint (with tiebreakers) | Complete |
+| Streamlit dashboard | Complete |
+| Prediction endpoint (live inference) | In progress |
+| Deployment | Planned |
+
+***
+
+## Author
+
+**Abhivanth Sivaprakash**  
+GitHub: [Abhi05-goat](https://github.com/Abhi05-goat)
