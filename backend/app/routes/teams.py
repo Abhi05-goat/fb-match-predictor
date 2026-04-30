@@ -19,6 +19,39 @@ def return_teams_for_season(season:int):
     teams_list = t_df['home_team'].unique()
     return {"teams":teams_list.tolist()} # -> {"teams":[AC Milan, Inter, Juventus, Napoli, Roma, Lazio, Fiorentina, Atalanta,...]}
 
+@router.get("/seasons/{season}/teams/standings")
+def return_standings(season: int):
+    t_df = temp_df[temp_df['season']==season]
+    columns = ['total_points','team_name','matches_played','points_per_match','wins','draws','losses','avg_xg','goal_difference','goals_scored']
+    teams_list = t_df['home_team'].unique()
+    d = {}
+    for col in columns:
+        d[col] = []
+    for team in teams_list:
+        team_stats = return_team_stats(season,team)
+        d['total_points'].append(team_stats['total_points'])
+        d['team_name'].append(team) 
+        d['matches_played'].append(team_stats['matches_played'])
+        d['points_per_match'].append(team_stats['points_per_match'])
+        d['wins'].append(team_stats['wins'])
+        d['draws'].append(team_stats['draws'])
+        d['losses'].append(team_stats['losses'])
+        d['avg_xg'].append(team_stats['average_xg'])
+        d['goals_scored'].append(team_stats['goals_scored'])
+        d['goal_difference'].append(team_stats['goal_difference'])
+
+    standings_df = pd.DataFrame(d)
+    standings_df = standings_df.sort_values(
+        by=['total_points', 'goal_difference', 'goals_scored'],
+        ascending=False
+    ).reset_index(drop=True)
+
+    standings_df.index += 1
+    standings_df.index.name = 'rank'
+
+    return standings_df.to_dict(orient='records')
+
+
 
 
 @router.get("/seasons/{season}/teams/{team_name}/summary")
