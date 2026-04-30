@@ -1,0 +1,26 @@
+{
+    "model_type": "XGBClassifier",
+    "draw_weight": 1.4,
+    "label_encoding": {
+        "H": 0,
+        "D": 1,
+        "A": 2
+    },
+    "model_params": {
+        "objective": "multi:softmax",
+        "num_class": 3,
+        "n_estimators": 500,
+        "max_depth": 4,
+        "learning_rate": 0.03,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 5,
+        "random_state": 42,
+        "eval_metric": "mlogloss",
+        "early_stopping_rounds": 40,
+        "verbosity": 0
+    },
+    "training_cutoff": "2024-08-01",
+    "test_season": 2425,
+    "n_features": 37
+}
