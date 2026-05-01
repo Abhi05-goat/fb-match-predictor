@@ -18,6 +18,25 @@ BLUE = "#2563eb"
 GOLD = "#d69b2d"
 RED = "#c2414b"
 
+TEAM_DOMAINS = {
+    "Inter": "inter.it", "Milan": "acmilan.com", "Juventus": "juventus.com",
+    "Roma": "asroma.com", "Napoli": "sscnapoli.it", "Lazio": "sslazio.it",
+    "Atalanta": "atalanta.it", "Fiorentina": "acffiorentina.com", "Bologna": "bolognafc.it",
+    "Torino": "torinofc.it", "Genoa": "genoacfc.it", "Verona": "hellasverona.it",
+    "Sassuolo": "sassuolocalcio.it", "Udinese": "udinese.it", "Monza": "acmonza.com",
+    "Lecce": "uslecce.it", "Salernitana": "salernitana.it", "Cagliari": "cagliaricalcio.com",
+    "Empoli": "empolifc.com", "Frosinone": "frosinonecalcio.com", "Sampdoria": "sampdoria.it",
+    "Spezia": "acspezia.com", "Cremonese": "uscremonese.it", "Venezia": "veneziafc.it",
+    "Como": "comofootball.com", "Parma": "parmacalcio1913.com"
+}
+
+def get_team_logo_url(team_name: str) -> str:
+    domain = TEAM_DOMAINS.get(team_name)
+    if domain:
+        return f"https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://{domain}&size=128"
+    initials = "".join(part[0] for part in team_name.split()).upper()[:3]
+    return f"https://ui-avatars.com/api/?name={initials}&background=0D8ABC&color=fff&rounded=true&bold=true"
+
 
 
 st.set_page_config(
@@ -153,6 +172,15 @@ st.markdown(
         color: #06452f;
         font-size: 2rem;
         font-weight: 950;
+        overflow: hidden;
+    }
+
+
+    .crest img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 10px;
     }
 
 
@@ -629,12 +657,50 @@ def discipline_chart(summary: dict) -> go.Figure:
 
 
 
+def generate_ai_insight(summary: dict) -> list[str]:
+    insights = []
+    
+    # Pressing Profile
+    ppda = summary["average_ppda"]
+    if ppda < 10.5:
+        insights.append(f"🔥 **Aggressive Pressing:** An elite PPDA of {ppda} means they suffocate opponents high up the pitch.")
+    elif ppda > 14.5:
+        insights.append(f"🛡️ **Low Block:** A PPDA of {ppda} indicates they prefer sitting deep and inviting pressure rather than pressing high.")
+    else:
+        insights.append(f"⚖️ **Balanced Pressing:** A moderate PPDA of {ppda} shows selective pressing triggers.")
+        
+    # Attack Profile
+    xg = summary["average_xg"]
+    goals = summary["goals_scored_per_match"]
+    if goals > xg + 0.3:
+        insights.append(f"⚽ **Clinical Finishers:** They score {goals} goals/match from only {xg} xG, significantly outperforming their expected output.")
+    elif goals < xg - 0.2:
+        insights.append(f"📉 **Underperforming Attack:** Creating dangerous chances ({xg} xG) but failing to finish them ({goals} goals/match).")
+    else:
+        insights.append(f"📊 **Consistent Attack:** Their goal output ({goals}) closely mirrors the quality of chances they create ({xg} xG).")
+        
+    # Defense Profile
+    gd = summary["goal_difference"] / summary["matches_played"]
+    if gd > 1.0:
+        insights.append("🏰 **Dominant Force:** They win games by a massive average margin of over a goal per game.")
+    elif gd < -0.8:
+        insights.append("⚠️ **Defensive Crisis:** Vulnerable at the back, frequently bleeding goals and losing games comfortably.")
+        
+    return insights
+
 def render_insights(summary: dict) -> None:
+    st.markdown('<div class="section-title">AI Gen Insights 🔮</div>', unsafe_allow_html=True)
+    
+    insights = generate_ai_insight(summary)
+    for insight in insights:
+        st.info(insight, icon="🤖")
+        
+    st.markdown('<div class="section-title" style="margin-top: 24px;">Quick Reads</div>', unsafe_allow_html=True)
+    
     goal_diff_per_match = round(summary["goal_difference"] / summary["matches_played"], 2)
     discipline_load = round(summary["yellow_cards_per_match"] + summary["red_cards_per_match"], 2)
 
 
-    st.markdown('<div class="section-title">Quick Reads</div>', unsafe_allow_html=True)
     col_a, col_b, col_c = st.columns(3)
     with col_a:
         st.markdown(
@@ -673,6 +739,7 @@ def render_insights(summary: dict) -> None:
 
 
 def render_team_header(summary: dict) -> None:
+    logo_url = get_team_logo_url(summary["team_name"])
     st.markdown(
         f"""
         <div class="hero">
@@ -685,7 +752,7 @@ def render_team_header(summary: dict) -> None:
                     <span class="badge">{summary["wins"]}W {summary["draws"]}D {summary["losses"]}L</span>
                 </div>
             </div>
-            <div class="crest">{team_initials(summary["team_name"])}</div>
+            <div class="crest"><img src="{logo_url}" alt="{summary['team_name']}"></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -712,11 +779,18 @@ def render_standings(standings: list[dict], selected_team: str) -> None:
         row_bg = "background:rgba(37,99,235,0.08);" if is_selected else ""
         team_label = f"<b>{row['team_name']}</b>" if is_selected else row["team_name"]
         gd = f"+{row['goal_difference']}" if row["goal_difference"] > 0 else str(row["goal_difference"])
+        
+        logo_url = get_team_logo_url(row["team_name"])
 
         rows_html += f"""
         <tr style="{row_bg}">
             <td style="color:{rank_color};font-weight:900;padding:7px 6px;text-align:center;">{i}</td>
-            <td style="padding:7px 6px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{team_label}</td>
+            <td style="padding:7px 6px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <img src="{logo_url}" style="width: 20px; height: 20px; object-fit: contain;">
+                    <span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{team_label}</span>
+                </div>
+            </td>
             <td style="text-align:center;padding:7px 4px;color:#667085;">{row['matches_played']}</td>
             <td style="text-align:center;padding:7px 4px;">{row['wins']}</td>
             <td style="text-align:center;padding:7px 4px;color:#667085;">{row['draws']}</td>
@@ -759,91 +833,84 @@ def render_standings(standings: list[dict], selected_team: str) -> None:
 def render_summary(summary: dict) -> None:
     render_team_header(summary)
 
-
-    st.markdown('<div class="section-title">Season Snapshot</div>', unsafe_allow_html=True)
-    metric_grid(summary)
     render_insights(summary)
 
+    st.markdown('<div class="section-title" style="margin-top: 24px;">Season Snapshot</div>', unsafe_allow_html=True)
+    metric_grid(summary)
 
-    overview_tab, attack_tab, control_tab, raw_tab = st.tabs(
-        ["Overview", "Attack", "Control and Discipline", "JSON"]
-    )
-
-
-    with overview_tab:
-        left, right = st.columns(2)
-        with left:
-            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-            st.plotly_chart(results_chart(summary), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with right:
-            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-            st.plotly_chart(goals_chart(summary), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.plotly_chart(team_profile_chart(summary), use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-
-    with attack_tab:
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Goals Scored / Match", summary["goals_scored_per_match"])
-        col_b.metric("Goals Conceded / Match", summary["goals_conceded_per_match"])
-        col_c.metric("Average xG", summary["average_xg"])
-
-
-        attack_df = pd.DataFrame(
-            {
-                "Metric": [
-                    "Goals Scored / Match",
-                    "Goals Conceded / Match",
-                    "Average xG",
-                    "Deep Completions / Match",
-                ],
-                "Value": [
-                    summary["goals_scored_per_match"],
-                    summary["goals_conceded_per_match"],
-                    summary["average_xg"],
-                    summary["deep_completions_per_match"],
-                ],
-            }
+    with st.expander("🔬 Deep Analytics & Data Visualizations", expanded=False):
+        overview_tab, attack_tab, control_tab, raw_tab = st.tabs(
+            ["Overview Visuals", "Attack Drilldown", "Control & Discipline", "Raw JSON"]
         )
-        st.dataframe(attack_df, use_container_width=True, hide_index=True)
 
+        with overview_tab:
+            left, right = st.columns(2)
+            with left:
+                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                st.plotly_chart(results_chart(summary), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with right:
+                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                st.plotly_chart(goals_chart(summary), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
-    with control_tab:
-        left, right = st.columns([0.9, 1.1])
-        with left:
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-            st.plotly_chart(discipline_chart(summary), use_container_width=True)
+            st.plotly_chart(team_profile_chart(summary), use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
+        with attack_tab:
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Goals Scored / Match", summary["goals_scored_per_match"])
+            col_b.metric("Goals Conceded / Match", summary["goals_conceded_per_match"])
+            col_c.metric("Average xG", summary["average_xg"])
 
-        discipline_df = pd.DataFrame(
-            {
-                "Metric": [
-                    "Average Elo",
-                    "Average PPDA",
-                    "Yellow Cards / Match",
-                    "Red Cards / Match",
-                    "Cards / Match",
-                ],
-                "Value": [
-                    summary["average_elo_score"],
-                    summary["average_ppda"],
-                    summary["yellow_cards_per_match"],
-                    summary["red_cards_per_match"],
-                    round(summary["yellow_cards_per_match"] + summary["red_cards_per_match"], 2),
-                ],
-            }
-        )
-        right.dataframe(discipline_df, use_container_width=True, hide_index=True)
+            attack_df = pd.DataFrame(
+                {
+                    "Metric": [
+                        "Goals Scored / Match",
+                        "Goals Conceded / Match",
+                        "Average xG",
+                        "Deep Completions / Match",
+                    ],
+                    "Value": [
+                        summary["goals_scored_per_match"],
+                        summary["goals_conceded_per_match"],
+                        summary["average_xg"],
+                        summary["deep_completions_per_match"],
+                    ],
+                }
+            )
+            st.dataframe(attack_df, use_container_width=True, hide_index=True)
 
+        with control_tab:
+            left, right = st.columns([0.9, 1.1])
+            with left:
+                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                st.plotly_chart(discipline_chart(summary), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
-    with raw_tab:
-        st.json(summary)
+            discipline_df = pd.DataFrame(
+                {
+                    "Metric": [
+                        "Average Elo",
+                        "Average PPDA",
+                        "Yellow Cards / Match",
+                        "Red Cards / Match",
+                        "Cards / Match",
+                    ],
+                    "Value": [
+                        summary["average_elo_score"],
+                        summary["average_ppda"],
+                        summary["yellow_cards_per_match"],
+                        summary["red_cards_per_match"],
+                        round(summary["yellow_cards_per_match"] + summary["red_cards_per_match"], 2),
+                    ],
+                }
+            )
+            right.dataframe(discipline_df, use_container_width=True, hide_index=True)
+
+        with raw_tab:
+            st.json(summary)
 
 
 
@@ -1071,11 +1138,21 @@ def comparison_radar_chart(team_a: dict, team_b: dict) -> go.Figure:
 
 
 def render_comparison(team_a: dict, team_b: dict) -> None:
+    logo_a = get_team_logo_url(team_a["team_name"])
+    logo_b = get_team_logo_url(team_b["team_name"])
+    
     st.markdown(
         f"""
-        <div class="comparison-hero">
-            <span>Team vs Team</span>
-            <h2>{team_a["team_name"]} vs {team_b["team_name"]}</h2>
+        <div class="comparison-hero" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span>Team vs Team</span>
+                <h2>{team_a["team_name"]} vs {team_b["team_name"]}</h2>
+            </div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <img src="{logo_a}" style="width: 70px; height: 70px; object-fit: contain;">
+                <span style="font-size: 1.5rem; font-weight: bold; color: #64748b;">VS</span>
+                <img src="{logo_b}" style="width: 70px; height: 70px; object-fit: contain;">
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1174,7 +1251,15 @@ if "compare_team_b" not in st.session_state:
 
 
 with st.sidebar:
-    st.title("Serie A Analytics")
+    st.markdown(
+        """
+        <div style="display:flex; align-items:center; gap: 14px; margin-bottom: 12px;">
+           <img src="https://a.espncdn.com/i/leaguelogos/soccer/500/12.png" width="38" style="object-fit:contain;">
+           <h1 style="margin:0; padding:0; font-size: 1.8rem; line-height:1.1;">Serie A<br>Analytics</h1>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.caption("Historical Serie A analytics")
     st.markdown(
         """
@@ -1297,13 +1382,16 @@ with st.sidebar:
 
 st.markdown(
     """
-    <div style="margin-bottom: 16px;">
-        <p style="margin: 0 0 8px; color: #2563eb; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;">
-            Serie A Analytics
-        </p>
-        <h1 style="margin: 0; line-height: 0.95; letter-spacing: 0;">
-            Team Season Intelligence
-        </h1>
+    <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 18px;">
+        <img src="https://a.espncdn.com/i/leaguelogos/soccer/500/12.png" style="height: 68px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">
+        <div>
+            <p style="margin: 0 0 6px; color: #2563eb; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;">
+                Serie A Analytics
+            </p>
+            <h1 style="margin: 0; line-height: 0.95; letter-spacing: 0;">
+                Team Season Intelligence
+            </h1>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
