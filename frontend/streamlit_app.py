@@ -8,7 +8,7 @@ import streamlit as st
 
 
 
-DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_API_BASE_URL = "https://fb-match-predictor.onrender.com"
 PLOT_BG = "rgba(0,0,0,0)"
 GRID = "#e6eefb"
 INK = "#111827"
