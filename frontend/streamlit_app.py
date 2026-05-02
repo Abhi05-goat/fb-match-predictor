@@ -8,7 +8,7 @@ import streamlit as st
 
 
 
-DEFAULT_API_BASE_URL = "https://fb-match-predictor.onrender.com"
+DEFAULT_API_BASE_URL = "http://127.0.0.1:8000" # "https://fb-match-predictor.onrender.com" 
 PLOT_BG = "rgba(0,0,0,0)"
 GRID = "#e6eefb"
 INK = "#111827"
@@ -435,6 +435,29 @@ def load_summary(api_base_url: str, season: int, team_name: str) -> dict:
     encoded_team = quote(team_name, safe="")
     return get_json(api_base_url, f"/seasons/{season}/teams/{encoded_team}/summary")
 
+@st.cache_data(ttl=3600)
+def load_all_summaries(api_base_url: str, season: int, teams: list[str]) -> list[dict]:
+    summaries = []
+    for t in teams:
+        summaries.append(load_summary(api_base_url, season, t))
+    return summaries
+
+def format_ordinal(n: int) -> str:
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+
+def get_metric_rank(summaries: list[dict], team_name: str, metric_key: str, higher_is_better: bool = True) -> str:
+    if metric_key == "cards_per_match":
+        sorted_teams = sorted(summaries, key=lambda x: x["yellow_cards_per_match"] + x["red_cards_per_match"], reverse=higher_is_better)
+    else:
+        sorted_teams = sorted(summaries, key=lambda x: x[metric_key], reverse=higher_is_better)
+    for i, t in enumerate(sorted_teams):
+        if t["team_name"] == team_name:
+            rank = format_ordinal(i + 1)
+            return f"Ranked {rank}"
+    return ""
+
 
 
 def load_standings(api_base_url: str, season: int) -> list[dict]:
@@ -442,27 +465,7 @@ def load_standings(api_base_url: str, season: int) -> list[dict]:
 
 
 
-def metric_grid(summary: dict) -> None:
-    row_one = st.columns(4)
-    row_one[0].metric("Points / Match", summary["points_per_match"], f"{summary['total_points']} total points")
-    row_one[1].metric("Record", f"{summary['wins']}-{summary['draws']}-{summary['losses']}", "W-D-L")
-    row_one[2].metric(
-        "Goal Diff / Match",
-        round(summary["goal_difference"] / summary["matches_played"], 2),
-        f"{summary['goal_difference']} total GD",
-    )
-    row_one[3].metric("Average Elo", summary["average_elo_score"])
 
-
-    row_two = st.columns(4)
-    row_two[0].metric("Average xG", summary["average_xg"], f"{summary['total_xg']} total")
-    row_two[1].metric("Average PPDA", summary["average_ppda"], "Lower often means more intense pressing")
-    row_two[2].metric("Deep Comp. / Match", summary["deep_completions_per_match"], f"{summary['total_deep_completions']} total")
-    row_two[3].metric(
-        "Cards / Match",
-        round(summary["yellow_cards_per_match"] + summary["red_cards_per_match"], 2),
-        f"{summary['yellow_cards_per_match']} yellow, {summary['red_cards_per_match']} red",
-    )
 
 
 
@@ -500,49 +503,18 @@ def base_figure_layout(fig: go.Figure, title: str, height: int = 370) -> go.Figu
 
 
 
-def results_chart(summary: dict) -> go.Figure:
-    labels = ["Wins", "Draws", "Losses"]
-    values = [summary["wins"], summary["draws"], summary["losses"]]
-    colors = [
-        "rgba(37, 99, 235, 0.70)",
-        "rgba(214, 155, 45, 0.62)",
-        "rgba(194, 65, 75, 0.62)",
-    ]
 
-
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=labels,
-                y=values,
-                marker_color=colors,
-                marker_line_color="rgba(255,255,255,0.95)",
-                marker_line_width=2,
-                width=0.55,
-                text=values,
-                textposition="outside",
-                textfont={"size": 15, "color": INK},
-                hovertemplate="<b>%{x}</b><br>%{y} matches<extra></extra>",
-            )
-        ]
-    )
-    base_figure_layout(fig, "Result Profile")
-    fig.update_yaxes(title="Matches")
-    fig.update_xaxes(title="")
-    return fig
 
 
 
 def goals_chart(summary: dict) -> go.Figure:
-    labels = ["Goals scored / match", "Goals conceded / match", "Average xG"]
+    labels = ["Goals scored / match", "Average xG"]
     values = [
         summary["goals_scored_per_match"],
-        summary["goals_conceded_per_match"],
         summary["average_xg"],
     ]
     colors = [
         "rgba(37, 99, 235, 0.70)",
-        "rgba(194, 65, 75, 0.62)",
         "rgba(14, 165, 233, 0.62)",
     ]
 
@@ -572,11 +544,12 @@ def goals_chart(summary: dict) -> go.Figure:
 
 
 def team_profile_chart(summary: dict) -> go.Figure:
-    categories = ["Points", "Goal diff", "xG", "Elo", "Control"]
+    categories = ["Points", "Goal diff", "xG", "Defense", "Elo", "Control"]
     values = [
         min(summary["points_per_match"] / 3, 1),
         max(min((summary["goal_difference"] + 60) / 120, 1), 0),
         min(summary["average_xg"] / 3, 1),
+        max(min((3 - summary["goals_conceded_per_match"]) / 3, 1), 0),
         max(min((summary["average_elo_score"] - 1300) / 800, 1), 0),
         max(min((18 - summary["average_ppda"]) / 18, 1), 0),
     ]
@@ -760,7 +733,7 @@ def render_team_header(summary: dict) -> None:
 
 
 
-def render_standings(standings: list[dict], selected_team: str) -> None:
+def render_standings(standings: list[dict], selected_team: str, season: int) -> None:
     st.markdown('<p style="margin:10px 0 10px; color:#142033; font-size:1.3rem; font-weight:850;">Standings</p>', unsafe_allow_html=True)
 
     rows_html = ""
@@ -771,6 +744,8 @@ def render_standings(standings: list[dict], selected_team: str) -> None:
             rank_color = "#2563eb"
         elif i <= 6:
             rank_color = "#d69b2d"
+        elif i == 7 and season >= 2122:
+            rank_color = "#10b981"
         elif i >= 18:
             rank_color = "#c2414b"
         else:
@@ -802,6 +777,8 @@ def render_standings(standings: list[dict], selected_team: str) -> None:
 
     hs = "padding:10px 8px;color:#667085;font-size:0.78rem;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;text-align:center;border-bottom:2px solid #dbe7fb;"
 
+    conference_html = '<span style="font-size:0.72rem;color:#10b981;font-weight:800;">&#9632; Conference League</span>' if season >= 2122 else ''
+
     html = f"""
     <div style="padding:16px 12px;border:1px solid #dbe7fb;border-radius:10px;background:#ffffff;box-shadow:0 12px 30px rgba(20,35,52,0.07);">
         <table style="width:100%;border-collapse:collapse;font-size:0.92rem;font-family:Inter,sans-serif;">
@@ -822,95 +799,95 @@ def render_standings(standings: list[dict], selected_team: str) -> None:
         <div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;">
             <span style="font-size:0.72rem;color:#2563eb;font-weight:800;">&#9632; Champions League</span>
             <span style="font-size:0.72rem;color:#d69b2d;font-weight:800;">&#9632; Europa</span>
+            {conference_html}
             <span style="font-size:0.72rem;color:#c2414b;font-weight:800;">&#9632; Relegation</span>
         </div>
     </div>
     """
     st.html(html)
 
+def render_leaderboard(all_summaries: list[dict], metric_key: str, title: str, higher_is_better: bool = True) -> None:
+    if metric_key == "goal_difference_per_match":
+        sorted_teams = sorted(all_summaries, key=lambda x: x["goal_difference"] / x["matches_played"] if x["matches_played"] > 0 else 0, reverse=higher_is_better)
+        values = [round(t["goal_difference"] / t["matches_played"], 2) if t["matches_played"] > 0 else 0 for t in sorted_teams]
+    elif metric_key == "cards_per_match":
+        sorted_teams = sorted(all_summaries, key=lambda x: x["yellow_cards_per_match"] + x["red_cards_per_match"], reverse=higher_is_better)
+        values = [round(t["yellow_cards_per_match"] + t["red_cards_per_match"], 2) for t in sorted_teams]
+    else:
+        sorted_teams = sorted(all_summaries, key=lambda x: x[metric_key], reverse=higher_is_better)
+        values = [round(t[metric_key], 2) for t in sorted_teams]
+        
+    df = pd.DataFrame({
+        "Rank": [i+1 for i in range(len(sorted_teams))],
+        "Team": [t["team_name"] for t in sorted_teams],
+        title: values
+    })
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
 
-def render_summary(summary: dict) -> None:
+def render_summary(summary: dict, all_summaries: list[dict]) -> None:
     render_team_header(summary)
 
     render_insights(summary)
 
-    st.markdown('<div class="section-title" style="margin-top: 24px;">Season Snapshot</div>', unsafe_allow_html=True)
-    metric_grid(summary)
+    st.plotly_chart(team_profile_chart(summary), use_container_width=True)
 
-    with st.expander("🔬 Deep Analytics & Data Visualizations", expanded=False):
-        overview_tab, attack_tab, control_tab, raw_tab = st.tabs(
-            ["Overview Visuals", "Attack Drilldown", "Control & Discipline", "Raw JSON"]
-        )
+    st.markdown('<div class="section-title" style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;"><span>Season Snapshot</span></div>', unsafe_allow_html=True)
+    
+    with st.expander("📚 Metrics Glossary & Legend", expanded=False):
+        st.markdown("""
+        - **Grey/Green Text:** Represents absolute totals or contextual definitions, *not* relative improvements.
+        - **xG (Expected Goals):** The statistical quality of scoring chances created.
+        - **PPDA:** Passes allowed Per Defensive Action. A lower number means the team presses more intensely.
+        - **Deep Completions:** Successful passes into the final 20 yards of the pitch.
+        - **Elo Rating:** A dynamic skill rating system where 1500 is average.
+        """)
 
-        with overview_tab:
-            left, right = st.columns(2)
-            with left:
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.plotly_chart(results_chart(summary), use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-            with right:
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.plotly_chart(goals_chart(summary), use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)
+    attack_tab, defense_tab, control_tab = st.tabs(["⚔️ Attack", "🛡️ Defense", "🎛️ Control"])
 
-            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-            st.plotly_chart(team_profile_chart(summary), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+    with attack_tab:
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Goals Scored / Match", summary["goals_scored_per_match"], get_metric_rank(all_summaries, summary["team_name"], "goals_scored_per_match", True), delta_color="off")
+        col_b.metric("Average xG", summary["average_xg"], get_metric_rank(all_summaries, summary["team_name"], "average_xg", True), delta_color="off")
+        col_c.metric("Deep Comp. / Match", summary["deep_completions_per_match"], get_metric_rank(all_summaries, summary["team_name"], "deep_completions_per_match", True), delta_color="off")
+        
+        with st.expander("🔬 View Attack Visualizations"):
+            st.plotly_chart(goals_chart(summary), use_container_width=True)
+            
+        with st.expander("🏆 Attack Leaderboards"):
+            l_t1, l_t2, l_t3, l_t4 = st.tabs(["Goals Scored", "Goals / Match", "Total xG", "xG / Match"])
+            with l_t1: render_leaderboard(all_summaries, "goals_scored", "Goals Scored", True)
+            with l_t2: render_leaderboard(all_summaries, "goals_scored_per_match", "Goals / Match", True)
+            with l_t3: render_leaderboard(all_summaries, "total_xg", "Total xG", True)
+            with l_t4: render_leaderboard(all_summaries, "average_xg", "xG / Match", True)
 
-        with attack_tab:
-            col_a, col_b, col_c = st.columns(3)
-            col_a.metric("Goals Scored / Match", summary["goals_scored_per_match"])
-            col_b.metric("Goals Conceded / Match", summary["goals_conceded_per_match"])
-            col_c.metric("Average xG", summary["average_xg"])
+    with defense_tab:
+        col_a, col_b = st.columns(2)
+        total_goals_conceded = int(round(summary["goals_conceded_per_match"] * summary["matches_played"]))
+        col_a.metric("Goals Conceded / Match", summary["goals_conceded_per_match"], get_metric_rank(all_summaries, summary["team_name"], "goals_conceded_per_match", False), delta_color="off")
+        col_b.metric("Total Goals Conceded", total_goals_conceded, get_metric_rank(all_summaries, summary["team_name"], "goals_conceded", False), delta_color="off")
 
-            attack_df = pd.DataFrame(
-                {
-                    "Metric": [
-                        "Goals Scored / Match",
-                        "Goals Conceded / Match",
-                        "Average xG",
-                        "Deep Completions / Match",
-                    ],
-                    "Value": [
-                        summary["goals_scored_per_match"],
-                        summary["goals_conceded_per_match"],
-                        summary["average_xg"],
-                        summary["deep_completions_per_match"],
-                    ],
-                }
-            )
-            st.dataframe(attack_df, use_container_width=True, hide_index=True)
+        with st.expander("🏆 Defense Leaderboards"):
+            l_t1, l_t2, l_t3, l_t4 = st.tabs(["Goals Conceded", "Conceded / Match", "Goal Diff", "GD / Match"])
+            with l_t1: render_leaderboard(all_summaries, "goals_conceded", "Goals Conceded", False)
+            with l_t2: render_leaderboard(all_summaries, "goals_conceded_per_match", "Conceded / Match", False)
+            with l_t3: render_leaderboard(all_summaries, "goal_difference", "Goal Diff", True)
+            with l_t4: render_leaderboard(all_summaries, "goal_difference_per_match", "GD / Match", True)
 
-        with control_tab:
-            left, right = st.columns([0.9, 1.1])
-            with left:
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.plotly_chart(discipline_chart(summary), use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            discipline_df = pd.DataFrame(
-                {
-                    "Metric": [
-                        "Average Elo",
-                        "Average PPDA",
-                        "Yellow Cards / Match",
-                        "Red Cards / Match",
-                        "Cards / Match",
-                    ],
-                    "Value": [
-                        summary["average_elo_score"],
-                        summary["average_ppda"],
-                        summary["yellow_cards_per_match"],
-                        summary["red_cards_per_match"],
-                        round(summary["yellow_cards_per_match"] + summary["red_cards_per_match"], 2),
-                    ],
-                }
-            )
-            right.dataframe(discipline_df, use_container_width=True, hide_index=True)
-
-        with raw_tab:
-            st.json(summary)
+    with control_tab:
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Average PPDA", summary["average_ppda"], get_metric_rank(all_summaries, summary["team_name"], "average_ppda", False), delta_color="off")
+        col_b.metric("Average Elo", summary["average_elo_score"], get_metric_rank(all_summaries, summary["team_name"], "average_elo_score", True), delta_color="off")
+        col_c.metric("Cards / Match", round(summary["yellow_cards_per_match"] + summary["red_cards_per_match"], 2), get_metric_rank(all_summaries, summary["team_name"], "cards_per_match", False), delta_color="off")
+        
+        with st.expander("🔬 View Control Visualizations"):
+            st.plotly_chart(discipline_chart(summary), use_container_width=True)
+            
+        with st.expander("🏆 Control Leaderboards"):
+            l_t1, l_t2, l_t3 = st.tabs(["Average PPDA", "Deep Completions", "Average Elo"])
+            with l_t1: render_leaderboard(all_summaries, "average_ppda", "PPDA (Lower=Better)", False)
+            with l_t2: render_leaderboard(all_summaries, "total_deep_completions", "Deep Completions", True)
+            with l_t3: render_leaderboard(all_summaries, "average_elo_score", "Average Elo", True)
 
 
 
@@ -1416,14 +1393,21 @@ else:
     else:
         try:
             summary = load_summary(api_base_url, selected_season, selected_team)
+            all_summaries = load_all_summaries(api_base_url, selected_season, teams)
             standings = load_standings(api_base_url, selected_season)
+            
+            if str(selected_season) == "2223":
+                for row in standings:
+                    if row["team_name"] == "Juventus":
+                        row["total_points"] = 62
+                standings.sort(key=lambda x: (x["total_points"], x["goal_difference"], x["goals_scored"]), reverse=True)
 
             main_col, standings_col = st.columns([2.2, 1])
             with main_col:
-                render_summary(summary)
+                render_summary(summary, all_summaries)
             with standings_col:
                 st.markdown("<div style='height: 220px'></div>", unsafe_allow_html=True)
-                render_standings(standings, selected_team)
+                render_standings(standings, selected_team, int(selected_season))
 
         except requests.RequestException as exc:
             st.error("Team summary could not be loaded.")
