@@ -8,7 +8,7 @@ import streamlit as st
 
 
 
-DEFAULT_API_BASE_URL =  "https://fb-match-predictor.onrender.com" # "http://127.0.0.1:8000"
+DEFAULT_API_BASE_URL = "https://fb-match-predictor.onrender.com"  # "http://127.0.0.1:8000" 
 PLOT_BG = "rgba(0,0,0,0)"
 GRID = "#e6eefb"
 INK = "#111827"
@@ -462,11 +462,6 @@ def get_metric_rank(summaries: list[dict], team_name: str, metric_key: str, high
 
 def load_standings(api_base_url: str, season: int) -> list[dict]:
     return get_json(api_base_url, f"/seasons/{season}/teams/standings")
-
-
-
-
-
 
 
 def base_figure_layout(fig: go.Figure, title: str, height: int = 370) -> go.Figure:
@@ -939,39 +934,43 @@ def _grouped_bar_chart(
     y_title: str,
     height: int = 390,
     y_range: list | None = None,
+    label_a: str | None = None,
+    label_b: str | None = None,
 ) -> go.Figure:
     labels = [m[0] for m in metrics]
     values_a = [comparison_value(team_a, m[1]) for m in metrics]
     values_b = [comparison_value(team_b, m[1]) for m in metrics]
 
+    name_a = label_a if label_a else team_a["team_name"]
+    name_b = label_b if label_b else team_b["team_name"]
 
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
             x=labels,
             y=values_a,
-            name=team_a["team_name"],
+            name=name_a,
             marker_color="rgba(37, 99, 235, 0.66)",
             marker_line_color="rgba(255,255,255,0.9)",
             marker_line_width=2,
             width=0.34,
             text=[round(v, 2) for v in values_a],
             textposition="outside",
-            hovertemplate=f"<b>{team_a['team_name']}</b><br>%{{x}}: %{{y}}<extra></extra>",
+            hovertemplate=f"<b>{name_a}</b><br>%{{x}}: %{{y}}<extra></extra>",
         )
     )
     fig.add_trace(
         go.Bar(
             x=labels,
             y=values_b,
-            name=team_b["team_name"],
+            name=name_b,
             marker_color="rgba(14, 165, 233, 0.54)",
             marker_line_color="rgba(255,255,255,0.9)",
             marker_line_width=2,
             width=0.34,
             text=[round(v, 2) for v in values_b],
             textposition="outside",
-            hovertemplate=f"<b>{team_b['team_name']}</b><br>%{{x}}: %{{y}}<extra></extra>",
+            hovertemplate=f"<b>{name_b}</b><br>%{{x}}: %{{y}}<extra></extra>",
         )
     )
     base_figure_layout(fig, title, height)
@@ -988,18 +987,20 @@ def _grouped_bar_chart(
 
 
 
-def comparison_per_match_chart(team_a: dict, team_b: dict) -> go.Figure:
+def comparison_per_match_chart(team_a: dict, team_b: dict, label_a: str | None = None, label_b: str | None = None) -> go.Figure:
     return _grouped_bar_chart(
         team_a, team_b,
         METRICS_PER_MATCH,
         "Per-Match Metrics",
         "Value per match",
         height=390,
+        label_a=label_a,
+        label_b=label_b,
     )
 
 
 
-def comparison_ppda_chart(team_a: dict, team_b: dict) -> go.Figure:
+def comparison_ppda_chart(team_a: dict, team_b: dict, label_a: str | None = None, label_b: str | None = None) -> go.Figure:
     return _grouped_bar_chart(
         team_a, team_b,
         METRICS_PPDA,
@@ -1007,13 +1008,17 @@ def comparison_ppda_chart(team_a: dict, team_b: dict) -> go.Figure:
         "PPDA (lower = more intense)",
         height=340,
         y_range=[0, 22],
+        label_a=label_a,
+        label_b=label_b,
     )
 
 
 
-def elo_comparison_chart(team_a: dict, team_b: dict) -> go.Figure:
+def elo_comparison_chart(team_a: dict, team_b: dict, label_a: str | None = None, label_b: str | None = None) -> go.Figure:
     values = [team_a["average_elo_score"], team_b["average_elo_score"]]
-    names = [team_a["team_name"], team_b["team_name"]]
+    name_a = label_a if label_a else team_a["team_name"]
+    name_b = label_b if label_b else team_b["team_name"]
+    names = [name_a, name_b]
     y_min = max(min(values) - 80, 0)
     y_max = max(values) + 80
 
@@ -1040,9 +1045,11 @@ def elo_comparison_chart(team_a: dict, team_b: dict) -> go.Figure:
 
 
 
-def comparison_radar_chart(team_a: dict, team_b: dict) -> go.Figure:
+def comparison_radar_chart(team_a: dict, team_b: dict, label_a: str | None = None, label_b: str | None = None) -> go.Figure:
     categories = ["PPM", "Attack", "Defense", "xG", "Elo", "Control"]
 
+    name_a = label_a if label_a else team_a["team_name"]
+    name_b = label_b if label_b else team_b["team_name"]
 
     def normalized(summary: dict) -> list[float]:
         return [
@@ -1068,7 +1075,7 @@ def comparison_radar_chart(team_a: dict, team_b: dict) -> go.Figure:
             r=values_a,
             theta=categories,
             fill="toself",
-            name=team_a["team_name"],
+            name=name_a,
             fillcolor="rgba(37, 99, 235, 0.18)",
             line={"color": BLUE, "width": 3},
         )
@@ -1078,7 +1085,7 @@ def comparison_radar_chart(team_a: dict, team_b: dict) -> go.Figure:
             r=values_b,
             theta=categories,
             fill="toself",
-            name=team_b["team_name"],
+            name=name_b,
             fillcolor="rgba(14, 165, 233, 0.16)",
             line={"color": "#0ea5e9", "width": 3},
         )
@@ -1114,16 +1121,19 @@ def comparison_radar_chart(team_a: dict, team_b: dict) -> go.Figure:
 
 
 
-def render_comparison(team_a: dict, team_b: dict) -> None:
+def render_comparison(team_a: dict, team_b: dict, label_a: str | None = None, label_b: str | None = None) -> None:
     logo_a = get_team_logo_url(team_a["team_name"])
     logo_b = get_team_logo_url(team_b["team_name"])
+
+    display_a = label_a if label_a else team_a["team_name"]
+    display_b = label_b if label_b else team_b["team_name"]
     
     st.markdown(
         f"""
         <div class="comparison-hero" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span>Team vs Team</span>
-                <h2>{team_a["team_name"]} vs {team_b["team_name"]}</h2>
+                <h2>{display_a} vs {display_b}</h2>
             </div>
             <div style="display: flex; gap: 20px; align-items: center;">
                 <img src="{logo_a}" style="width: 70px; height: 70px; object-fit: contain;">
@@ -1159,9 +1169,9 @@ def render_comparison(team_a: dict, team_b: dict) -> None:
     matchup_html = f"""
         <div class="matchup-card">
             <div class="matchup-row">
-                <div class="matchup-name">{team_a["team_name"]}</div>
+                <div class="matchup-name">{display_a}</div>
                 <div></div>
-                <div class="matchup-name">{team_b["team_name"]}</div>
+                <div class="matchup-name">{display_b}</div>
             </div>
             {''.join(rows_html)}
         </div>
@@ -1173,24 +1183,104 @@ def render_comparison(team_a: dict, team_b: dict) -> None:
         st.html(matchup_html)
     with col_right:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.plotly_chart(comparison_radar_chart(team_a, team_b), use_container_width=True)
+        st.plotly_chart(comparison_radar_chart(team_a, team_b, label_a=display_a, label_b=display_b), use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
 
     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-    st.plotly_chart(comparison_per_match_chart(team_a, team_b), use_container_width=True)
+    st.plotly_chart(comparison_per_match_chart(team_a, team_b, label_a=display_a, label_b=display_b), use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
     col_ppda, col_elo = st.columns(2)
     with col_ppda:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.plotly_chart(comparison_ppda_chart(team_a, team_b), use_container_width=True)
+        st.plotly_chart(comparison_ppda_chart(team_a, team_b, label_a=display_a, label_b=display_b), use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
     with col_elo:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.plotly_chart(elo_comparison_chart(team_a, team_b), use_container_width=True)
+        st.plotly_chart(elo_comparison_chart(team_a, team_b, label_a=display_a, label_b=display_b), use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+
+def render_cross_season_comparison(api_base_url: str, seasons: list[int]) -> None:
+    """Render the cross-season comparison UI where each slot has its own season + team picker."""
+
+    season_labels = {format_season(s): s for s in seasons}
+    season_label_list = list(season_labels.keys())
+
+    st.markdown(
+        """
+        <div class="comparison-hero">
+            <span>Cross-Season Compare</span>
+            <h2>Any Team · Any Era</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_a_header, col_vs, col_b_header = st.columns([1, 0.18, 1])
+
+    with col_a_header:
+        st.markdown("#### 🔵 Side A")
+        default_season_a_idx = len(season_label_list) - 1
+        cs_season_a_label = st.selectbox(
+            "Season (A)",
+            season_label_list,
+            index=default_season_a_idx,
+            key="cs_season_a",
+        )
+        cs_season_a = season_labels[cs_season_a_label]
+
+        try:
+            teams_a = load_teams(api_base_url, cs_season_a)
+        except requests.RequestException:
+            st.error("Could not load teams for Season A.")
+            return
+
+        cs_team_a = st.selectbox("Team (A)", teams_a, key="cs_team_a")
+
+    with col_vs:
+        st.markdown(
+            "<div style='display:flex;align-items:center;justify-content:center;height:100%;padding-top:52px;font-size:2rem;font-weight:900;color:#94a3b8;'>VS</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col_b_header:
+        st.markdown("#### 🩵 Side B")
+        default_season_b_idx = max(0, len(season_label_list) - 2)
+        cs_season_b_label = st.selectbox(
+            "Season (B)",
+            season_label_list,
+            index=default_season_b_idx,
+            key="cs_season_b",
+        )
+        cs_season_b = season_labels[cs_season_b_label]
+
+        try:
+            teams_b = load_teams(api_base_url, cs_season_b)
+        except requests.RequestException:
+            st.error("Could not load teams for Season B.")
+            return
+
+        cs_team_b = st.selectbox("Team (B)", teams_b, key="cs_team_b")
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    if st.button("⚡ Compare", type="primary", use_container_width=True, key="cs_compare_btn"):
+        try:
+            summary_a = load_summary(api_base_url, cs_season_a, cs_team_a)
+            summary_b = load_summary(api_base_url, cs_season_b, cs_team_b)
+
+            label_a = f"{cs_team_a} ({format_season(cs_season_a)})"
+            label_b = f"{cs_team_b} ({format_season(cs_season_b)})"
+
+            render_comparison(summary_a, summary_b, label_a=label_a, label_b=label_b)
+
+        except requests.RequestException as exc:
+            st.error("Could not load one or both team summaries. Check the API connection.")
+            st.code(str(exc))
 
 
 
@@ -1262,8 +1352,8 @@ with st.sidebar:
 
     selected_mode = st.radio(
         "View",
-        ["Dashboard", "Compare Teams"],
-        horizontal=True,
+        ["Dashboard", "Compare Teams", "Cross-Season Compare"],
+        horizontal=False,
         key="sidebar_view_mode",
     )
     selected_season = None
@@ -1272,7 +1362,7 @@ with st.sidebar:
     compare_team_b = None
 
 
-    if seasons:
+    if seasons and selected_mode != "Cross-Season Compare":
         season_labels = {format_season(season): season for season in seasons}
         season_values = list(season_labels.values())
         if st.session_state.selected_season not in season_values:
@@ -1292,14 +1382,14 @@ with st.sidebar:
 
 
     teams = []
-    if selected_season is not None:
+    if selected_season is not None and selected_mode != "Cross-Season Compare":
         try:
             teams = load_teams(api_base_url, selected_season)
         except requests.RequestException:
             st.error("Teams could not be loaded.")
 
 
-    if teams:
+    if teams and selected_mode != "Cross-Season Compare":
         if selected_mode == "Dashboard":
             if st.session_state.selected_team not in teams:
                 st.session_state.selected_team = teams[0]
@@ -1315,7 +1405,7 @@ with st.sidebar:
             st.session_state.selected_team = selected_team
 
 
-        else:
+        elif selected_mode == "Compare Teams":
             st.markdown("#### Team vs Team")
             if st.session_state.compare_team_a not in teams:
                 st.session_state.compare_team_a = teams[0]
@@ -1351,6 +1441,15 @@ with st.sidebar:
                 )
                 st.session_state.compare_team_b = compare_team_b
 
+    if selected_mode == "Cross-Season Compare":
+        st.markdown(
+            """
+            <div class="sidebar-card">
+                <p>🗓️ Pick any team from any season on each side — compare across eras.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.divider()
     st.caption("Current version uses historical completed seasons only.")
@@ -1376,7 +1475,13 @@ st.markdown(
 
 
 
-if selected_mode == "Compare Teams":
+if selected_mode == "Cross-Season Compare":
+    if not seasons:
+        render_empty_state()
+    else:
+        render_cross_season_comparison(api_base_url, seasons)
+
+elif selected_mode == "Compare Teams":
     if selected_season is None or compare_team_a is None or compare_team_b is None:
         render_empty_state()
     else:
