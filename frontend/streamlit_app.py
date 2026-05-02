@@ -8,7 +8,7 @@ import streamlit as st
 
 
 
-DEFAULT_API_BASE_URL = "https://fb-match-predictor.onrender.com"  # "http://127.0.0.1:8000" 
+DEFAULT_API_BASE_URL = "https://fb-match-predictor.onrender.com"  # "http://127.0.0.1:8000"  
 PLOT_BG = "rgba(0,0,0,0)"
 GRID = "#e6eefb"
 INK = "#111827"
@@ -1352,7 +1352,7 @@ with st.sidebar:
 
     selected_mode = st.radio(
         "View",
-        ["Dashboard", "Compare Teams", "Cross-Season Compare"],
+        ["Dashboard", "Cross-Season Compare"],
         horizontal=False,
         key="sidebar_view_mode",
     )
@@ -1481,17 +1481,6 @@ if selected_mode == "Cross-Season Compare":
     else:
         render_cross_season_comparison(api_base_url, seasons)
 
-elif selected_mode == "Compare Teams":
-    if selected_season is None or compare_team_a is None or compare_team_b is None:
-        render_empty_state()
-    else:
-        try:
-            team_a_summary = load_summary(api_base_url, selected_season, compare_team_a)
-            team_b_summary = load_summary(api_base_url, selected_season, compare_team_b)
-            render_comparison(team_a_summary, team_b_summary)
-        except requests.RequestException as exc:
-            st.error("Team comparison could not be loaded.")
-            st.code(str(exc))
 else:
     if selected_season is None or selected_team is None:
         render_empty_state()
